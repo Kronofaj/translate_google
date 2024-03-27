@@ -1,0 +1,4 @@
+gcloud
+google-cloud-translate
+google-cloud-speech
+pyaudio
