@@ -1,11 +1,42 @@
 import pyaudio
 import queue
+from threading import Thread
 
 # Audio recording parameters
 RATE = 16000
 CHUNK = int(RATE / 10)  # 100ms
 
-class MicrophoneStream:
+class MicrophoneStream(Thread):
+    def __init__(self, event, chunk=CHUNK, format=pyaudio.paInt16, channels=1, rate=RATE):
+        super().__init__()
+        self.event = event
+        self.chunk = chunk
+        self.format = format
+        self.channels = channels
+        self.rate = rate
+        self.p = pyaudio.PyAudio()
+        self.stream = self.p.open(format=self.format,
+                                  channels=self.channels,
+                                  rate=self.rate,
+                                  input=True,
+                                  frames_per_buffer=self.chunk)
+        self.frames = []
+
+    def run(self):
+        print("Microphone stream started.")
+        while not self.event.is_set():
+            data = self.stream.read(self.chunk)
+            self.frames.append(data)
+
+    def close(self):
+        self.stream.stop_stream()
+        self.stream.close()
+        self.p.terminate()
+
+
+
+
+class MicrophoneStream_old:
     """Opens a recording stream as a generator yielding the audio chunks."""
 
     def __init__(self: object, rate: int = RATE, chunk: int = CHUNK) -> None:
