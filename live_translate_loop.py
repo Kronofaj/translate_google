@@ -146,6 +146,7 @@ def translate_loop(input_language:str, text_original, text_1, text_2) -> None:
         config=config, interim_results=True
     )
 
+
     with MicrophoneStream(RATE, CHUNK) as stream:
         print("micro stream launched")
         audio_generator = stream.generator()

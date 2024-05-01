@@ -1,24 +1,24 @@
 import tkinter as tk
 
 from live_translate_loop import translate_loop
-from thread_with_exception import ThreadWithException
+from microphone import MicrophoneStream
 from threading import Event
 
 
 def button1_click():
-    thread.raise_exception()
-    thread.join()
-    start_thread("fr-fr")
+    fr_event.set()
+    es_event.clear()
+    it_event.clear()
 
 def button2_click():
-    thread.raise_exception()
-    thread.join()
-    start_thread("es-es")
+    fr_event.clear()
+    es_event.set()
+    it_event.clear()
 
 def button3_click():
-    thread.raise_exception()
-    thread.join()
-    start_thread("it-it")
+    fr_event.clear()
+    es_event.clear()
+    it_event.set()
 
 # Start a separate thread to update text asynchronously
 def start_thread(input_language:str):
@@ -26,27 +26,27 @@ def start_thread(input_language:str):
         text_original = label_fr_text
         text_1 = label_it_text
         text_2 = label_es_text
+        event = fr_event
     elif input_language == "es-es":
         text_original = label_es_text
         text_1 = label_fr_text
         text_2 = label_it_text
+        event = es_event
     elif input_language == "it-it":
         text_original = label_it_text
         text_1 = label_fr_text
         text_2 = label_es_text
-    thread = ThreadWithException(target=translate_loop, args =(input_language,
-                                                            text_original,
-                                                            text_1,
-                                                            text_2))
+        event = it_event
+    thread = MicrophoneStream(event=event, input_language=input_language, text_original=text_original, text_1=text_1, text_2=text_2)
     thread.daemon = True
     thread.start()
-    globals()["thread"] = thread
-
 
 fr_event = Event()
 globals()["fr_event"] = fr_event
+es_event = Event()
+globals()["es_event"] = es_event
 it_event = Event()
-globals()["fr_event"] = it_event
+globals()["it_event"] = it_event
 
 # Create the main window
 root = tk.Tk()
@@ -105,9 +105,10 @@ button3.pack(side=tk.LEFT, padx=5, pady=5)
 
 #label_frame.place(x=10, y=10)
 
-thread = None
-input_language = "fr-fr"
-start_thread(input_language)
+start_thread("fr-fr")
+start_thread("es-es")
+start_thread("it-it")
+fr_event.set()
 
 # Run the GUI
 root.mainloop()
