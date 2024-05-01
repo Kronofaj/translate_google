@@ -154,7 +154,7 @@ def translate_loop(input_language:str, text_original, text_1, text_2) -> None:
 
     with MicrophoneStream(RATE, CHUNK) as stream:
         print("micro stream launched")
-        audio_generator = stream.generator()
+        audio_generator = (s for s in stream.generator() if not stop_event.is_set())
         requests = (
             speech.StreamingRecognizeRequest(audio_content=content)
             for content in audio_generator
@@ -173,8 +173,7 @@ def translate_loop(input_language:str, text_original, text_1, text_2) -> None:
 
 # Start a separate thread to update text asynchronously
 def start_thread(input_language:str):
-    stop_event = Event()
-    globals()["stop_event"] = stop_event
+    stop_event.clear()
     if input_language == "fr-fr":
         text_original = label_fr_text
         text_1 = label_it_text
@@ -197,7 +196,6 @@ def start_thread(input_language:str):
 
 def stop_thread():
     stop_event.set()
-    time.sleep(2)
     thread.join()
 
 def button1_click():
@@ -212,27 +210,55 @@ def button3_click():
     stop_thread()
     start_thread("it-it")
 
+stop_event = Event()
+globals()["stop_event"] = stop_event
 
 # Create the main window
 root = tk.Tk()
 root.title("Live Translate")
+root.configure(background="white")
+root.geometry("1920x1080")
+height=300
 
 # Create labels
-tk.Label(root, text="Texte en Français", wraplength=800, justify="center", fg='blue').pack()
+# label_frame = tk.Frame(root,width=1800,height=300,bg="white")
+# label_frame.pack_propagate(0)
+tk.Label(root, text="Texte en Français", font=('Arial', '40'), wraplength=1800, justify="center", fg='navy', background="white").pack()
 label_fr_text = tk.StringVar()
 label_fr_text.set("texte en Français")
-label_fr = tk.Label(root, textvariable=label_fr_text, font=('Arial', '24'), wraplength=800, justify="center")
-label_fr.pack()
-tk.Label(root, text="Texto en Español", wraplength=800, justify="center", fg='red').pack()
+label_fr = tk.Label(root, textvariable=label_fr_text, 
+                    font=('Arial', '60'), 
+                    wraplength=1800, 
+                    justify="left", 
+                    background="white", 
+                    anchor="w", 
+                    #   height=height
+                    )
+label_fr.pack(anchor="nw")
+tk.Label(root, text="Texto en Español", font=('Arial', '40'), wraplength=1800, justify="center", fg='red4', background="white").pack()
 label_es_text = tk.StringVar()
 label_es_text.set("texto en Español")
-label_es = tk.Label(root, textvariable=label_es_text, font=('Arial', '24'), wraplength=800, justify="center")
-label_es.pack()
-tk.Label(root, text="Testo in Italiano", wraplength=800, justify="center", fg='green').pack()
+label_es = tk.Label(root, textvariable=label_es_text, 
+                    font=('Arial', '60'), 
+                    wraplength=1800, 
+                    justify="left", 
+                    background="white", 
+                    anchor="w", 
+                    # height=height
+                    )
+label_es.pack(anchor="nw")
+tk.Label(root, text="Testo in Italiano", font=('Arial', '40'), wraplength=1800, justify="center", fg='dark green', background="white").pack()
 label_it_text = tk.StringVar()
 label_it_text.set("testo in Italiano")
-label_it = tk.Label(root, textvariable=label_it_text, font=('Arial', '24'), wraplength=800, justify="center")
-label_it.pack()
+label_it = tk.Label(root, textvariable=label_it_text, 
+                    font=('Arial', '60'), 
+                    wraplength=1800, 
+                    justify="left", 
+                    background="white", 
+                    anchor="w", 
+                    # height=height
+                    )
+label_it.pack(anchor="nw")
 
 # Create buttons
 label_buttons = tk.Label(root, text="Langue parlée / Idioma hablado / Lingua parlata")
@@ -243,6 +269,8 @@ button2 = tk.Button(root, text="Español", command=button2_click)
 button2.pack(side=tk.LEFT, padx=5, pady=5)
 button3 = tk.Button(root, text="Italiano", command=button3_click)
 button3.pack(side=tk.LEFT, padx=5, pady=5)
+
+#label_frame.place(x=10, y=10)
 
 thread = None
 input_language = "fr-fr"

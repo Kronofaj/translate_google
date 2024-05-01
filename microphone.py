@@ -19,6 +19,15 @@ class MicrophoneStream:
 
     def __enter__(self: object) -> object:
         self._audio_interface = pyaudio.PyAudio()
+        input_device_index=0
+        info = self._audio_interface.get_host_api_info_by_index(0)
+        numdevices = info.get('deviceCount')
+
+        for i in range(0, numdevices):
+            if (self._audio_interface.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+                if self._audio_interface.get_device_info_by_host_api_device_index(0, i).get('name').startswith("Yeti"):
+                   input_device_index = i
+                   break
         self._audio_stream = self._audio_interface.open(
             format=pyaudio.paInt16,
             # The API currently only supports 1-channel (mono) audio
@@ -31,6 +40,7 @@ class MicrophoneStream:
             # This is necessary so that the input device's buffer doesn't
             # overflow while the calling thread makes network requests, etc.
             stream_callback=self._fill_buffer,
+            input_device_index=input_device_index
         )
 
         self.closed = False

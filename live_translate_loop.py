@@ -63,6 +63,8 @@ def listen_translate_loop(responses: object,
     print("enter the translate loop")
     num_chars_printed = 0
     for response in responses:
+        if stop_event.is_set():
+            break
         if not response.results:
             continue
 
