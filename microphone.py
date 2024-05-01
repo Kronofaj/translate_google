@@ -154,6 +154,7 @@ class MicrophoneStream(Thread):
                             threshold += PERIODIC_THRESHOLD
             else:
                 self.event.wait()
+                self._buff.empty()
                 time.sleep(0.5)
 
     def close(self):
