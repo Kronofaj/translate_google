@@ -11,7 +11,7 @@ import time
 
 # Audio recording parameters
 RATE = 16000
-CHUNK = int(RATE / 10)  # 100ms
+CHUNK = int(RATE / 100)  # 100ms
 # other parameters
 PERIODIC_THRESHOLD =50
 
@@ -89,6 +89,7 @@ class MicrophoneStream(Thread):
         while True:
             if self.event.is_set():
                 print(f'entering the listening loop for {self.language_text_1} and {self.language_text_2}')
+                self._buff.queue.clear()
                 audio_generator = (s for s in self.generator() if self.event.is_set())
                 # data = self.stream.read(self.chunk)
                 # self.frames.append(data)
@@ -138,9 +139,9 @@ class MicrophoneStream(Thread):
                         response_2 = translate_text_with_model(self.translate_client, self.language_text_2, transcript + overwrite_chars)
                         #print(it_str)
 
-                        self.text_original.set(htmlparser.unescape(response_1["input"]))
-                        self.text_1.set(htmlparser.unescape(response_1["translatedText"]))
-                        self.text_2.set(htmlparser.unescape(response_2["translatedText"]))
+                        self.text_original.set(limit_text_length(response_1["input"]))
+                        self.text_1.set(limit_text_length(response_1["translatedText"]))
+                        self.text_2.set(limit_text_length(response_2["translatedText"]))
 
                         # Exit recognition if any of the transcribed phrases could be
                         # one of our keywords.
@@ -229,6 +230,19 @@ class MicrophoneStream(Thread):
             yield b"".join(data)
 
 
+def limit_text_length(text: str):
+    text = htmlparser.unescape(text)
+    if len(text) > 150:
+        words = text.split(' ')
+        text = ''
+        words.reverse()
+        for word in words:
+            text = word + ' ' + text
+            if len(text)>140:
+                break
+    return text  
+        
+            
 
 def translate_text_with_model(translate_client, target: str, text: str, model: str = "nmt") -> dict:
     """Translates text into the target language.
@@ -246,243 +260,8 @@ def translate_text_with_model(translate_client, target: str, text: str, model: s
     # will return a sequence of results for each text.
     result = translate_client.translate(text, target_language=target, model=model)
 
-    print("Text: {}".format(result["input"]))
-    print("Translation: {}".format(result["translatedText"]))
-    print("Detected source language: {}".format(result["detectedSourceLanguage"]))
+    # print("Text: {}".format(result["input"]))
+    # print("Translation: {}".format(result["translatedText"]))
+    # print("Detected source language: {}".format(result["detectedSourceLanguage"]))
 
     return result
-
-def listen_translate_loop(responses: object, 
-                          language_text_1:str, 
-                          language_text_2:str, 
-                          text_original,
-                          text_1,
-                          text_2,
-                          client) -> str:
-    """Iterates through server responses and prints them.
-
-    The responses passed is a generator that will block until a response
-    is provided by the server.
-
-    Each response may contain multiple results, and each result may contain
-    multiple alternatives; for details, see https://goo.gl/tjCPAU.  Here we
-    print only the transcription for the top alternative of the top result.
-
-    In this case, responses are provided for interim results as well. If the
-    response is an interim one, print a line feed at the end of it, to allow
-    the next result to overwrite it, until the response is a final one. For the
-    final one, print a newline to preserve the finalized transcription.
-
-    Args:
-        responses: List of server responses
-
-    Returns:
-        The transcribed text.
-    """
-    print("enter the translate loop")
-    num_chars_printed = 0
-    for response in responses:
-        if not response.results:
-            continue
-
-        # The `results` list is consecutive. For streaming, we only care about
-        # the first result being considered, since once it's `is_final`, it
-        # moves on to considering the next utterance.
-        result = response.results[0]
-        if not result.alternatives:
-            continue
-
-        # Display the transcription of the top alternative.
-        transcript = result.alternatives[0].transcript
-
-        # Display interim results, but with a carriage return at the end of the
-        # line, so subsequent lines will overwrite them.
-        #
-        # If the previous result was longer than this one, we need to print
-        # some extra spaces to overwrite the previous result
-        overwrite_chars = " " * (num_chars_printed - len(transcript))
-        
-        # set a logic to translate every 50 characters
-        threshold = PERIODIC_THRESHOLD
-
-        if not result.is_final and num_chars_printed < threshold:
-            sys.stdout.write(transcript + overwrite_chars + "\r")
-            sys.stdout.flush()
-            text_original.set(transcript + overwrite_chars)
-            num_chars_printed = len(transcript)
-
-        else:
-            # print(transcript + overwrite_chars)
-            response_1 = translate_text_with_model(client, language_text_1, transcript + overwrite_chars)
-            #print(es_str)
-            
-            response_2 = translate_text_with_model(client, language_text_2, transcript + overwrite_chars)
-            #print(it_str)
-
-            text_original.set(htmlparser.unescape(response_1["input"]))
-            text_1.set(htmlparser.unescape(response_1["translatedText"]))
-            text_2.set(htmlparser.unescape(response_2["translatedText"]))
-
-            # Exit recognition if any of the transcribed phrases could be
-            # one of our keywords.
-            # if re.search(r"\b(stop)\b", transcript, re.I):
-            #     print("Exiting..")
-            #     break
-            if result.is_final:
-                num_chars_printed = 0
-                threshold = PERIODIC_THRESHOLD
-            else:
-                threshold += PERIODIC_THRESHOLD
-
-    return text_original, text_1, text_2
-
-def translate_loop(input_language:str, text_original, text_1, text_2) -> None:
-    
-    translate_client = translate.Client()
-    # See http://g.co/cloud/speech/docs/languages
-    # for a list of supported languages.
-    if input_language == "fr-fr":
-        language_text_1 = "it"
-        language_text_2 = "es"
-    elif input_language == "es-es":
-        language_text_1 = "fr"
-        language_text_2 = "it"
-    elif input_language == "it-it":
-        language_text_1 = "fr"
-        language_text_2 = "es"
-
-    """Transcribe speech from audio file."""
-
-
-    client = speech.SpeechClient()
-    config = speech.RecognitionConfig(
-        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        sample_rate_hertz=RATE,
-        language_code=input_language,
-    )
-
-    streaming_config = speech.StreamingRecognitionConfig(
-        config=config, interim_results=True
-    )
-
-    with MicrophoneStream(RATE, CHUNK) as stream:
-        print("micro stream launched")
-        audio_generator = stream.generator()
-        requests = (
-            speech.StreamingRecognizeRequest(audio_content=content)
-            for content in audio_generator
-        )
-
-        responses = client.streaming_recognize(streaming_config, requests)
-
-        # Now, put the transcription responses to use.
-        listen_translate_loop(responses, 
-                              language_text_1, 
-                              language_text_2, 
-                              text_original,
-                              text_1, 
-                              text_2,
-                              translate_client)
-
-
-
-
-
-
-class MicrophoneStream_old:
-    """Opens a recording stream as a generator yielding the audio chunks."""
-
-    def __init__(self: object, rate: int = RATE, chunk: int = CHUNK) -> None:
-        """The audio -- and generator -- is guaranteed to be on the main thread."""
-        self._rate = rate
-        self._chunk = chunk
-
-        # Create a thread-safe buffer of audio data
-        self._buff = queue.Queue()
-        self.closed = True
-
-    def __enter__(self: object) -> object:
-        self._audio_interface = pyaudio.PyAudio()
-        self._audio_stream = self._audio_interface.open(
-            format=pyaudio.paInt16,
-            # The API currently only supports 1-channel (mono) audio
-            # https://goo.gl/z757pE
-            channels=1,
-            rate=self._rate,
-            input=True,
-            frames_per_buffer=self._chunk,
-            # Run the audio stream asynchronously to fill the buffer object.
-            # This is necessary so that the input device's buffer doesn't
-            # overflow while the calling thread makes network requests, etc.
-            stream_callback=self._fill_buffer,
-        )
-
-        self.closed = False
-
-        return self
-
-    def __exit__(
-        self: object,
-        type: object,
-        value: object,
-        traceback: object,
-    ) -> None:
-        """Closes the stream, regardless of whether the connection was lost or not."""
-        self._audio_stream.stop_stream()
-        self._audio_stream.close()
-        self.closed = True
-        # Signal the generator to terminate so that the client's
-        # streaming_recognize method will not block the process termination.
-        self._buff.put(None)
-        self._audio_interface.terminate()
-
-    def _fill_buffer(
-        self: object,
-        in_data: object,
-        frame_count: int,
-        time_info: object,
-        status_flags: object,
-    ) -> object:
-        """Continuously collect data from the audio stream, into the buffer.
-
-        Args:
-            in_data: The audio data as a bytes object
-            frame_count: The number of frames captured
-            time_info: The time information
-            status_flags: The status flags
-
-        Returns:
-            The audio data as a bytes object
-        """
-        self._buff.put(in_data)
-        return None, pyaudio.paContinue
-
-    def generator(self: object) -> object:
-        """Generates audio chunks from the stream of audio data in chunks.
-
-        Args:
-            self: The MicrophoneStream object
-
-        Returns:
-            A generator that outputs audio chunks.
-        """
-        while not self.closed:
-            # Use a blocking get() to ensure there's at least one chunk of
-            # data, and stop iteration if the chunk is None, indicating the
-            # end of the audio stream.
-            chunk = self._buff.get()
-            if chunk is None:
-                return
-            data = [chunk]
-
-            # Now consume whatever other data's still buffered.
-            while True:
-                try:
-                    chunk = self._buff.get(block=False)
-                    if chunk is None:
-                        return
-                    data.append(chunk)
-                except queue.Empty:
-                    break
-
-            yield b"".join(data)
