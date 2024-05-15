@@ -1,6 +1,5 @@
 import tkinter as tk
 
-from live_translate_loop import translate_loop
 from microphone import MicrophoneStream
 from threading import Event
 
@@ -56,7 +55,9 @@ root.geometry("1920x1080")
 height=300
 
 # Create labels
-tk.Label(root, text="Texte en Français", font=('Arial', '30'), wraplength=1250, justify="center", fg='navy', background="white").pack()
+button1 = tk.Button(root, text="Français", command=button1_click, font=('Arial', '30'), wraplength=1250, justify="center", fg='navy', background="white")
+button1.pack()
+# tk.Label(root, text="Texte en Français", font=('Arial', '30'), wraplength=1250, justify="center", fg='navy', background="white").pack()
 label_fr_text = tk.StringVar()
 label_fr_text.set("texte en Français")
 label_fr = tk.Label(root, textvariable=label_fr_text, 
@@ -68,7 +69,8 @@ label_fr = tk.Label(root, textvariable=label_fr_text,
                     #   height=height
                     )
 label_fr.pack(anchor="nw")
-tk.Label(root, text="Texto en Español", font=('Arial', '30'), wraplength=1250, justify="center", fg='red4', background="white").pack()
+button2 = tk.Button(root, text="Español", command=button2_click, font=('Arial', '30'), wraplength=1250, justify="center", fg='red4', background="white")
+button2.pack()
 label_es_text = tk.StringVar()
 label_es_text.set("texto en Español")
 label_es = tk.Label(root, textvariable=label_es_text, 
@@ -80,7 +82,8 @@ label_es = tk.Label(root, textvariable=label_es_text,
                     # height=height
                     )
 label_es.pack(anchor="nw")
-tk.Label(root, text="Testo in Italiano", font=('Arial', '30'), wraplength=1250, justify="center", fg='dark green', background="white").pack()
+button3 = tk.Button(root, text="Italiano", command=button3_click, font=('Arial', '30'), wraplength=1250, justify="center", fg='dark green', background="white")
+button3.pack()
 label_it_text = tk.StringVar()
 label_it_text.set("testo in Italiano")
 label_it = tk.Label(root, textvariable=label_it_text, 
@@ -93,22 +96,10 @@ label_it = tk.Label(root, textvariable=label_it_text,
                     )
 label_it.pack(anchor="nw")
 
-# Create buttons
-label_buttons = tk.Label(root, text="Langue parlée / Idioma hablado / Lingua parlata")
-label_buttons.pack()
-button1 = tk.Button(root, text="Français", command=button1_click)
-button1.pack(side=tk.LEFT, padx=5, pady=5)
-button2 = tk.Button(root, text="Español", command=button2_click)
-button2.pack(side=tk.LEFT, padx=5, pady=5)
-button3 = tk.Button(root, text="Italiano", command=button3_click)
-button3.pack(side=tk.LEFT, padx=5, pady=5)
 
-#label_frame.place(x=10, y=10)
-
-start_thread("fr-fr")
+start_thread("fr-fr")   
 start_thread("es-es")
 start_thread("it-it")
-fr_event.set()
 
 # Run the GUI
 root.mainloop()

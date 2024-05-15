@@ -9,11 +9,14 @@ from google.cloud import speech
 from google.cloud import translate_v2 as translate
 import time
 
+from itertools import islice
+
 # Audio recording parameters
 RATE = 16000
 CHUNK = int(RATE / 100)  # 100ms
-# other parameters
-PERIODIC_THRESHOLD =50
+MAX_CHARACTERS = 140
+MAX_WORDS = 30
+
 
 class MicrophoneStream(Thread):
     def __init__(self, event, input_language:str, text_original, text_1, text_2, chunk=CHUNK, format=pyaudio.paInt16, channels=1, rate=RATE):
@@ -46,10 +49,24 @@ class MicrophoneStream(Thread):
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=RATE,
             language_code=input_language,
+            max_alternatives=1, 
+            audio_channel_count=1, 
+            model="phone_call",
+            enable_automatic_punctuation=True,
+            # metadata = {
+            #     "interaction_type": "PRESENTATION"
+            # }
         )
-
+        #voice_activity_timeout = speech.StreamingRecognitionConfig.VoiceActivityTimeout(speeh_start)
         self.streaming_config = speech.StreamingRecognitionConfig(
-            config=config, interim_results=True
+            config=config, 
+            interim_results=True,
+            # single_utterance=True,
+            enable_voice_activity_events=True,
+            voice_activity_timeout = {
+                "speech_end_timeout": "3.0s",
+                "speech_end_timeout": "3.0s",
+                }
         )
         
         # previously in self.__enter__
@@ -97,62 +114,55 @@ class MicrophoneStream(Thread):
                     speech.StreamingRecognizeRequest(audio_content=content)
                     for content in audio_generator if self.event.is_set()
                 )
+                print("speech service call")
                 responses = self.client.streaming_recognize(self.streaming_config, requests)
                 num_chars_printed = 0
-                for response in responses:
-                    if not self.event.is_set():
-                        break
-                    if not response.results:
-                        continue
+                try:
+                    for response in responses:
+                        if not self.event.is_set():
+                            break
+                        if not response.results:
+                            continue
 
-                    # The `results` list is consecutive. For streaming, we only care about
-                    # the first result being considered, since once it's `is_final`, it
-                    # moves on to considering the next utterance.
-                    result = response.results[0]
-                    if not result.alternatives:
-                        continue
+                        # The `results` list is consecutive. For streaming, we only care about
+                        # the first result being considered, since once it's `is_final`, it
+                        # moves on to considering the next utterance.
+                        result = response.results[0]
+                        if not result.alternatives:
+                            continue
 
-                    # Display the transcription of the top alternative.
-                    transcript = result.alternatives[0].transcript
+                        # Display the transcription of the top alternative.
+                        transcript = result.alternatives[0].transcript
+                            
+                        # Display interim results, but with a carriage return at the end of the
+                        # line, so subsequent lines will overwrite them.
+                        #
+                        # If the previous result was longer than this one, we need to print
+                        # some extra spaces to overwrite the previous result
+                        overwrite_chars = " " * (num_chars_printed - len(transcript))
+                        
+                        # set a logic to translate every 50 characters
 
-                    # Display interim results, but with a carriage return at the end of the
-                    # line, so subsequent lines will overwrite them.
-                    #
-                    # If the previous result was longer than this one, we need to print
-                    # some extra spaces to overwrite the previous result
-                    overwrite_chars = " " * (num_chars_printed - len(transcript))
-                    
-                    # set a logic to translate every 50 characters
-                    threshold = PERIODIC_THRESHOLD
-
-                    if not result.is_final and num_chars_printed < threshold:
-                        sys.stdout.write(transcript + overwrite_chars + "\r")
-                        sys.stdout.flush()
-                        self.text_original.set(transcript + overwrite_chars)
+                        # self.text_original.set(transcript + overwrite_chars)
                         num_chars_printed = len(transcript)
 
-                    else:
                         # print(transcript + overwrite_chars)
-                        response_1 = translate_text_with_model(self.translate_client, self.language_text_1, transcript + overwrite_chars)
+                        limited_text = limit_text_words(transcript + overwrite_chars)
+                        response_1 = translate_text_with_model(self.translate_client, self.language_text_1, limited_text)
                         #print(es_str)
                         
-                        response_2 = translate_text_with_model(self.translate_client, self.language_text_2, transcript + overwrite_chars)
+                        response_2 = translate_text_with_model(self.translate_client, self.language_text_2, limited_text)
                         #print(it_str)
 
                         self.text_original.set(limit_text_length(response_1["input"]))
                         self.text_1.set(limit_text_length(response_1["translatedText"]))
                         self.text_2.set(limit_text_length(response_2["translatedText"]))
-
-                        # Exit recognition if any of the transcribed phrases could be
-                        # one of our keywords.
-                        # if re.search(r"\b(stop)\b", transcript, re.I):
-                        #     print("Exiting..")
-                        #     break
                         if result.is_final:
-                            num_chars_printed = 0
-                            threshold = PERIODIC_THRESHOLD
-                        else:
-                            threshold += PERIODIC_THRESHOLD
+                            break
+                except Exception as e:
+                    print(e)
+                    continue
+                        
             else:
                 self.event.wait()
                 self._buff.empty()
@@ -238,11 +248,16 @@ def limit_text_length(text: str):
         words.reverse()
         for word in words:
             text = word + ' ' + text
-            if len(text)>140:
+            if len(text)>MAX_CHARACTERS:
                 break
     return text  
         
-            
+def limit_text_words(text: str):
+    text = htmlparser.unescape(text)
+    words = text.split(' ')
+    if len(words)>MAX_WORDS:
+        return ' '.join(words[len(words)-MAX_WORDS:])
+    return text 
 
 def translate_text_with_model(translate_client, target: str, text: str, model: str = "nmt") -> dict:
     """Translates text into the target language.
